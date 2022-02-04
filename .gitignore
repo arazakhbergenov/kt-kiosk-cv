@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# TensorRT engines
+*.engine
+*.trt
+
 # Distribution / packaging
 .Python
 build/
