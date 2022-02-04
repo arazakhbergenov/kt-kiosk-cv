@@ -1,5 +1,12 @@
 import torch
 import torch.nn as nn
+import cv2
+import numpy as np
+import pycuda.autoinit
+import pycuda.driver as cuda
+import tensorrt as trt
+from utils.boxes import letterbox
+
 
 from utils.web_ops import attempt_download
    
@@ -39,3 +46,124 @@ def attempt_load(weights, map_location=None):
         for k in ['names', 'stride']:
             setattr(model, k, getattr(model[-1], k))
         return model  # return ensemble
+
+
+class HostDeviceMem(object):
+    """
+    Простой вспомогательный класс данных, который немного удобнее использовать, чем tuple
+    """
+    def __init__(self, host, device):
+        self.host = host
+        self.device = device
+
+    def __str__(self):
+        return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
+
+    def __repr__(self):
+        return self.__str__()
+
+
+def RepointCV():
+    """
+    Класс является оболочкой для операций на TensorRT
+    """
+    def __init__(self, engine_file_path, image_size=(640, 640)):
+        """
+        Создание контекста модели на видеокарте и десериализация от engine файлов
+
+        Args:
+            engine_file_path: путь к engine файлу (модели на TensorRT)
+            image_size: размер изображения
+        """
+        # Create a Context on this device,
+        self.cfx = cuda.Device(0).make_context()
+        stream = cuda.Stream()
+        TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
+        runtime = trt.Runtime(TRT_LOGGER)
+
+        trt.init_libnvinfer_plugins(None, '')
+
+        # Deserialize the engine from file
+        with open(engine_file_path, "rb") as f:
+            engine = runtime.deserialize_cuda_engine(f.read())
+        context = engine.create_execution_context()
+
+        inputs = []
+        outputs = []
+        bindings = []
+
+        for binding in engine:
+            size = trt.volume(engine.get_binding_shape(
+                binding)) * engine.max_batch_size
+            dtype = trt.nptype(engine.get_binding_dtype(binding))
+            # Allocate host and device buffers
+            host_mem = cuda.pagelocked_empty(size, dtype)
+            cuda_mem = cuda.mem_alloc(host_mem.nbytes)
+            # Append the device buffer to device bindings.
+            bindings.append(int(cuda_mem))
+            # Append to the appropriate list.
+            if engine.binding_is_input(binding):
+                inputs.append(HostDeviceMem(host_mem, cuda_mem))
+            else:
+                outputs.append(HostDeviceMem(host_mem, cuda_mem))
+
+        # Store
+        self.stream = stream
+        self.context = context
+        self.engine = engine
+        self.inputs = inputs
+        self.outputs = outputs
+        self.bindings = bindings
+
+        self.image_size = image_size
+    
+
+    def preprocess(self, image):
+        img = letterbox(image, new_shape=self.img_size)
+        img = np.ascontiguousarray(img.transpose((2, 0, 1)))
+        # img = torch.from_numpy(img).to(self.device)
+        img = img.float() / 255.0
+        img = img[None]  # ???
+        return img
+
+    
+    def infer(self, image):
+        """
+        Возвращает результаты последнего слоя модели (нейронной сети) на TensorRT
+
+        Args:
+            input_image: очищенное (нормализованное) изображение
+
+        Returns:
+            final_layer: результаты последнего слоя модели
+        """
+        # Make self the active context, pushing it on top of the context stack.
+        self.cfx.push()
+        # Restore
+        stream = self.stream
+        context = self.context
+        inputs = self.inputs
+        outputs = self.outputs
+        bindings = self.bindings
+        # Copy input image to host buffer
+        np.copyto(inputs[0].host, image.ravel())
+        # Transfer input data  to the GPU.
+        [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
+        # Run inference.
+        context.execute_async(bindings=bindings, stream_handle=stream.handle)
+        # Transfer predictions back from the GPU.
+        [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
+        # Synchronize the stream
+        stream.synchronize()
+        # Remove any context from the top of the context stack, deactivating it.
+        self.cfx.pop()
+        return [out.host for out in outputs]
+
+    
+    def detect_people(self, image):
+        img = self.preprocess(image)
+        pred = self.infer(image)
+        self.postprocess(pred, img, image)
+        return image
+
+
