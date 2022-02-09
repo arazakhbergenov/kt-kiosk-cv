@@ -5,7 +5,7 @@ import numpy as np
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
-from utils.boxes import letterbox
+from utils.boxes import letterbox, letterbox2
 
 
 from utils.web_ops import attempt_download
@@ -48,7 +48,7 @@ def attempt_load(weights, map_location=None):
         return model  # return ensemble
 
 
-class HostDeviceMem(object):
+class HostDevice:
     """
     Простой вспомогательный класс данных, который немного удобнее использовать, чем tuple
     """
@@ -63,11 +63,11 @@ class HostDeviceMem(object):
         return self.__str__()
 
 
-def RepointCV():
+class RepointCV:
     """
     Класс является оболочкой для операций на TensorRT
     """
-    def __init__(self, engine_file_path, image_size=(640, 640)):
+    def __init__(self, engine_file_path, image_size=(640, 384)):
         """
         Создание контекста модели на видеокарте и десериализация от engine файлов
 
@@ -103,9 +103,9 @@ def RepointCV():
             bindings.append(int(cuda_mem))
             # Append to the appropriate list.
             if engine.binding_is_input(binding):
-                inputs.append(HostDeviceMem(host_mem, cuda_mem))
+                inputs.append(HostDevice(host_mem, cuda_mem))
             else:
-                outputs.append(HostDeviceMem(host_mem, cuda_mem))
+                outputs.append(HostDevice(host_mem, cuda_mem))
 
         # Store
         self.stream = stream
@@ -117,16 +117,15 @@ def RepointCV():
 
         self.image_size = image_size
     
-
-    def preprocess(self, image):
-        img = letterbox(image, new_shape=self.img_size)
+    def preprocess(self, img, new_shape=(384, 640)):  # height, width
+        # img = letterbox(img, new_shape=self.image_size)
+        img = cv2.resize(img, (new_shape[1], new_shape[0]), interpolation=cv2.INTER_LINEAR)
         img = np.ascontiguousarray(img.transpose((2, 0, 1)))
         # img = torch.from_numpy(img).to(self.device)
-        img = img.float() / 255.0
-        img = img[None]  # ???
+        img = img.astype(np.float32) / 255.0
+        # img = img[None]  # ???
         return img
 
-    
     def infer(self, image):
         """
         Возвращает результаты последнего слоя модели (нейронной сети) на TensorRT
@@ -159,11 +158,17 @@ def RepointCV():
         self.cfx.pop()
         return [out.host for out in outputs]
 
-    
     def detect_people(self, image):
         img = self.preprocess(image)
         pred = self.infer(image)
-        self.postprocess(pred, img, image)
-        return image
+        # self.postprocess(pred, img, image)
+        return pred
+    
+    def destroy(self):
+        """
+        Освобождает ресурсы модели формата TensorRT на видеокарте
+        """
+        self.cfx.pop()
+    
 
 
