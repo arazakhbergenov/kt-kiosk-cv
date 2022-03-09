@@ -7,7 +7,8 @@ import os
 import math
 import argparse
 
-from yolov5_trt import YoLov5TRT
+from models.yolov5_trt import YoLov5TRT
+import utils
 
 WINDOW_SHAPE = (1280, 720)
 FPS_THRESHOLD = 1  # each 1 frame
@@ -21,7 +22,7 @@ def define_working_directory():
         os.chdir(cwd + 'tensorrtx/yolov5')
 
 
-def detect_objects(args):
+def display_subjects(args):
     # choosing a video source
     if args.video_path is not None:
         video_file = 'VideoFile'
@@ -29,7 +30,7 @@ def detect_objects(args):
     else:
         video_file = 'camera'
         # video_source = f'rtsp://{login}:{password}@{host}'
-        video_source = f'rtsp://{args.host}'
+        video_source = args.host
     
     global WINDOW_SHAPE
     if args.mini:
@@ -56,21 +57,15 @@ def detect_objects(args):
                 break
 
             frame_counter += 1
-            # if frame_counter % FPS_THRESHOLD != 0:
-            #     frame = cv2.resize(frame, WINDOW_SHAPE)
-            #     cv2.imshow(f'Video_{video_file}', frame)
-            #     ch = cv2.waitKey(FREEZE_TIME)
-            #     if ch == 27 or ch == ord('q'):
-            #         break
-            #     elif ch == ord('s'):
-            #         cv2.imwrite(f'/home/asylbek/Pictures/{frame_counter}.jpg', frame)
-            #     continue
 
-            batch_frames, use_time = model.infer_frame(frame, categories)
+            boxes, scores, use_time = model.infer_subjects(frame)
 
             print('Input from {}, time->{:.2f}ms'.format(video_source, use_time * 1000))
             if args.visualize:
-                frame = cv2.resize(batch_frames[0], WINDOW_SHAPE)
+                frame = cv2.resize(frame, WINDOW_SHAPE)
+                for i in range(len(boxes)):
+                    utils.draw.plot_one_box(boxes[i], frame, color=(0, 255, 0), label="{:.2f}".format(scores[i]))
+
                 cv2.imshow(f'Video_{video_file}', frame)
                 ch = cv2.waitKey(FREEZE_TIME)
                 if ch == 27 or ch == ord('q'):
@@ -128,8 +123,8 @@ if __name__ == '__main__':
     parser.add_argument('--password', default=None, help='The password of the camera')
     parser.add_argument('--host', default=None, help='The IP address of the camera')
     parser.add_argument('--mini', default=False, help='The window size is reduced if it is true')
-    parser.add_argument('--engine-path', default="models/yolov5m.engine", help='The path to a engine file for testing')
-    parser.add_argument('--plugin-path', default="models/libmyplugins.so", help='The path to a plugin file for testing')
+    parser.add_argument('--engine-path', default="weights/yolov5m.engine", help='The path to a engine file for testing')
+    parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for testing')
     parser.add_argument('--video-path', default=None, help='The path to a video file for testing')
     parser.add_argument('--visualize', default=False, action='store_true', help='The window displays the videostream if it is true')
     parser.add_argument('--camera', default='intel', help="The type of the camera - 'intel' or 'hikvision'")
@@ -157,4 +152,4 @@ if __name__ == '__main__':
             "hair drier", "toothbrush"]
 
     # transmit_live(args)
-    detect_objects(args)
+    display_subjects(args)
