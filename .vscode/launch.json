@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "cwd": "${fileDirname}",
-            "args": ["--weights", "/home/asylbek/projects/kt-kiosk-cv/nets/crowdhuman_yolov5m.pt", "--device", "0", "--source", "4", "--view-img"]
+            "args": ["--weights", "weights/crowdhuman_yolov5m_384x640.engine"]
         }
     ]
 }
