@@ -86,7 +86,7 @@ def transmit_live(args):
     video_file = 'camera'
     if args.host is not None:
         if args.camera == 'intel':
-            video_source = f'rtsp://{args.host}'
+            video_source = args.host
         elif args.camera == 'hikvision':
             video_source = f'rtsp://{args.login}:{args.password}@{args.host}'
         else:
@@ -151,5 +151,5 @@ if __name__ == '__main__':
             "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
             "hair drier", "toothbrush"]
 
-    # transmit_live(args)
-    display_subjects(args)
+    transmit_live(args)
+    # display_subjects(args)
