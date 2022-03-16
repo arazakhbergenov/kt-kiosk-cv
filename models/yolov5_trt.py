@@ -197,6 +197,15 @@ class YoLov5TRT(object):
         result_scores = result_scores[subjects]
         return result_boxes, result_scores, end - start
 
+    def infer_distances(self, depth, boxes):
+        boxes_num = boxes.shape[0]
+        distances = np.zeros((boxes_num, ), dtype=np.float32)
+        centers = np.zeros((boxes_num, 2), dtype=np.float32)
+        centers[:, 0] = (boxes[:, 0] + boxes[:, 2]) / 2
+        centers[:, 1] = (boxes[:, 1] + boxes[:, 3]) / 2
+
+        return distances
+
     def destroy(self):
         # Remove any context from the top of the context stack, deactivating it.
         self.ctx.pop()
