@@ -14,6 +14,8 @@ import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 
+from utils.draw import plot_one_box
+
 CONF_THRESH = 0.5
 IOU_THRESHOLD = 0.4
 
