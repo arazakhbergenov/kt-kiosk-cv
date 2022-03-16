@@ -15,13 +15,6 @@ FPS_THRESHOLD = 1  # each 1 frame
 FREEZE_TIME = 1  # waiting time for each frame in milliseconds
 
 
-def define_working_directory():
-    cwd = os.getcwd()
-    target_path = '/'.join(cwd.split('/')[-2:])
-    if not target_path.endswith('tensorrtx/yolov5'):
-        os.chdir(cwd + 'tensorrtx/yolov5')
-
-
 def display_subjects(args):
     # choosing a video source
     if args.video_path is not None:
@@ -141,15 +134,5 @@ if __name__ == '__main__':
     # define_working_directory()
     ctypes.CDLL(plugin_path)
 
-    categories = ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-            "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-            "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-            "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-            "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-            "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-            "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-            "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-            "hair drier", "toothbrush"]
-
-    transmit_live(args)
-    # display_subjects(args)
+    # transmit_live(args)
+    display_subjects(args)
