@@ -10,7 +10,8 @@ import argparse
 from models.yolov5_trt import YoLov5TRT
 import utils
 
-WINDOW_SHAPE = (1280, 720)
+RAW_IMG_SHAPE = (1280, 720)
+DISPLAY_SHAPE = (1280, 720)
 FPS_THRESHOLD = 1  # each 1 frame
 FREEZE_TIME = 1  # waiting time for each frame in milliseconds
 
@@ -24,10 +25,11 @@ def display_subjects(args):
         video_file = 'camera'
         # video_source = f'rtsp://{login}:{password}@{host}'
         video_source = args.host
+        depth_source = args.depth
     
-    global WINDOW_SHAPE
+    global DISPLAY_SHAPE
     if args.mini:
-        WINDOW_SHAPE = (720, 405)
+        DISPLAY_SHAPE = (720, 405)
     
     try:
         model = YoLov5TRT(args.engine_path)
@@ -40,22 +42,30 @@ def display_subjects(args):
     # starting person detection
     print('Connecting to the camera...')
     video_reader = cv2.VideoCapture(video_source)
+    depth_reader = cv2.VideoCapture(depth_source)
     frame_counter = 0
     try:
         global FPS_THRESHOLD 
         print('Person detection has started...')
-        while video_reader.isOpened():
-            status, frame = video_reader.read()
-            if not status:
+        while video_reader.isOpened() and depth_reader.isOpened():
+            status_rgb, frame = video_reader.read()
+            status_depth, depth = depth_reader.read()
+            if not status_rgb:
+                print('Input from RGB Camera {} not available'.format(args.host))
+                break
+            if not status_depth:
+                print('Input from Depth Camera {} not available'.format(args.depth))
                 break
 
             frame_counter += 1
 
+            frame = cv2.resize(frame, RAW_IMG_SHAPE)
             boxes, scores, use_time = model.infer_subjects(frame)
+            distances = model.infer_distances(depth, boxes)
 
-            print('Input from {}, time->{:.2f}ms'.format(video_source, use_time * 1000))
+            print('Input from {}, time->{:.2f}ms, frame_shape={}, depth_shape={}'.format(video_source, use_time * 1000, frame.shape, depth.shape))
             if args.visualize:
-                frame = cv2.resize(frame, WINDOW_SHAPE)
+                frame = cv2.resize(frame, DISPLAY_SHAPE)
                 for i in range(len(boxes)):
                     utils.draw.plot_one_box(boxes[i], frame, color=(0, 255, 0), label="{:.2f}".format(scores[i]))
 
@@ -88,9 +98,9 @@ def transmit_live(args):
         video_source = 4
     video_reader = cv2.VideoCapture(video_source)
 
-    global WINDOW_SHAPE
+    global DISPLAY_SHAPE
     if args.mini:
-        WINDOW_SHAPE = (720, 405)
+        DISPLAY_SHAPE = (720, 405)
 
     frame_counter = 0
     while video_reader.isOpened():
@@ -99,7 +109,7 @@ def transmit_live(args):
             break
 
         frame_counter += 1
-        frame = cv2.resize(frame, WINDOW_SHAPE)
+        frame = cv2.resize(frame, DISPLAY_SHAPE)
         cv2.imshow(f'Video_{video_file}', frame)
         ch = cv2.waitKey(FREEZE_TIME)
         if ch == 27 or ch == ord('q'):
@@ -114,7 +124,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--login', default=None, help='The login of the camera')
     parser.add_argument('--password', default=None, help='The password of the camera')
-    parser.add_argument('--host', default=None, help='The IP address of the camera')
+    parser.add_argument('--host', default=None, help='The IP address of the RGB camera')
+    parser.add_argument('--depth', default=None, help='The IP address of the Depth camera')
     parser.add_argument('--mini', default=False, help='The window size is reduced if it is true')
     parser.add_argument('--engine-path', default="weights/yolov5m.engine", help='The path to a engine file for testing')
     parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for testing')
@@ -122,17 +133,9 @@ if __name__ == '__main__':
     parser.add_argument('--visualize', default=False, action='store_true', help='The window displays the videostream if it is true')
     parser.add_argument('--camera', default='intel', help="The type of the camera - 'intel' or 'hikvision'")
     args = parser.parse_args()
-    login = args.login
-    password = args.password
-    host = args.host
-    mini = args.mini
-    engine_path = args.engine_path
-    plugin_path = args.plugin_path
-    video_path = args.video_path
-    visualize = args.visualize
 
     # define_working_directory()
-    ctypes.CDLL(plugin_path)
+    ctypes.CDLL(args.plugin_path)
 
     # transmit_live(args)
     display_subjects(args)
