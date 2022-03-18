@@ -86,6 +86,7 @@ class YoLov5TRT(object):
         self.cuda_outputs = cuda_outputs
         self.bindings = bindings
         self.batch_size = engine.max_batch_size
+        self.depth_scale = 0.0010000000474974513
 
     def infer(self, raw_image_generator):
         threading.Thread.__init__(self)
@@ -200,13 +201,19 @@ class YoLov5TRT(object):
         return result_boxes, result_scores, end - start
 
     def infer_distances(self, depth, boxes):
+        # Add a second dimension, when it has only one dimension (only one box is found)
+        if len(boxes.shape) < 2:  
+            boxes = boxes.reshape((-1, 4))
         boxes_num = boxes.shape[0]
+
         distances = np.zeros((boxes_num, ), dtype=np.float32)
-        centers = np.zeros((boxes_num, 2), dtype=np.float32)
+        centers = np.zeros((boxes_num, 2), dtype=np.int32)
         centers[:, 0] = (boxes[:, 0] + boxes[:, 2]) / 2
         centers[:, 1] = (boxes[:, 1] + boxes[:, 3]) / 2
+        for idx, center in enumerate(centers):
+            distances[idx] = depth[center[1], center[0], 0] * self.depth_scale  # y-x or width-height order from OpenCV
 
-        return distances
+        return distances, centers
 
     def destroy(self):
         # Remove any context from the top of the context stack, deactivating it.
