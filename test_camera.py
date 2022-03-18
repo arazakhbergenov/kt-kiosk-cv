@@ -10,8 +10,8 @@ import argparse
 from models.yolov5_trt import YoLov5TRT
 import utils
 
-RAW_IMG_SHAPE = (1280, 720)
-DISPLAY_SHAPE = (1280, 720)
+RAW_IMG_SHAPE = (640, 480)
+DISPLAY_SHAPE = (640, 480)
 FPS_THRESHOLD = 1  # each 1 frame
 FREEZE_TIME = 1  # waiting time for each frame in milliseconds
 
@@ -61,13 +61,15 @@ def display_subjects(args):
 
             frame = cv2.resize(frame, RAW_IMG_SHAPE)
             boxes, scores, use_time = model.infer_subjects(frame)
-            distances = model.infer_distances(depth, boxes)
+            distances, centers = model.infer_distances(depth, boxes)
 
             print('Input from {}, time->{:.2f}ms, frame_shape={}, depth_shape={}'.format(video_source, use_time * 1000, frame.shape, depth.shape))
             if args.visualize:
                 frame = cv2.resize(frame, DISPLAY_SHAPE)
                 for i in range(len(boxes)):
-                    utils.draw.plot_one_box(boxes[i], frame, color=(0, 255, 0), label="{:.2f}".format(scores[i]))
+                    utils.draw.plot_one_box(boxes[i], frame, color=(0, 255, 0), label="{:.2f} {:.2f} {} {}".format(
+                        scores[i], distances[i], centers[i, 0], centers[i, 1]))
+                    cv2.circle(frame, (centers[i, 0], centers[i, 1]), 5, (0, 255, 0), thickness=-1, lineType=cv2.LINE_AA)
 
                 cv2.imshow(f'Video_{video_file}', frame)
                 ch = cv2.waitKey(FREEZE_TIME)
@@ -82,7 +84,6 @@ def display_subjects(args):
 
         model.destroy()
         print('Person detection has finished!')
-
 
 
 def transmit_live(args):
@@ -110,6 +111,10 @@ def transmit_live(args):
 
         frame_counter += 1
         frame = cv2.resize(frame, DISPLAY_SHAPE)
+        # print(frame.shape, frame[360, 640, :])
+        # print(frame[:, :, 0].shape)
+        # frame = cv2.applyColorMap(cv2.convertScaleAbs(frame[:, :, 0], alpha=0.03), cv2.COLORMAP_JET)
+
         cv2.imshow(f'Video_{video_file}', frame)
         ch = cv2.waitKey(FREEZE_TIME)
         if ch == 27 or ch == ord('q'):
@@ -122,20 +127,25 @@ def transmit_live(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--login', default=None, help='The login of the camera')
-    parser.add_argument('--password', default=None, help='The password of the camera')
     parser.add_argument('--host', default=None, help='The IP address of the RGB camera')
     parser.add_argument('--depth', default=None, help='The IP address of the Depth camera')
-    parser.add_argument('--mini', default=False, help='The window size is reduced if it is true')
-    parser.add_argument('--engine-path', default="weights/yolov5m.engine", help='The path to a engine file for testing')
-    parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for testing')
-    parser.add_argument('--video-path', default=None, help='The path to a video file for testing')
-    parser.add_argument('--visualize', default=False, action='store_true', help='The window displays the videostream if it is true')
+    parser.add_argument('--login', default=None, help='The login of the Hikvision camera')
+    parser.add_argument('--password', default=None, help='The password of the Hikvision camera')
     parser.add_argument('--camera', default='intel', help="The type of the camera - 'intel' or 'hikvision'")
+    parser.add_argument('--video-path', default=None, help='The path to a video file for testing')
+
+    parser.add_argument('--engine-path', default="weights/yolov5m.engine", help='The path to a engine file for testing')
+    parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for testing')    
+    
+    parser.add_argument('--mini', default=False, help='The window size is reduced if it is true')
+    parser.add_argument('--visualize', default=False, action='store_true', help='The window displays the videostream if it is true')
+    parser.add_argument('--live', default=False, action='store_true', help='Live-stream if it is true or run inference if it is false')
     args = parser.parse_args()
 
     # define_working_directory()
     ctypes.CDLL(args.plugin_path)
 
-    # transmit_live(args)
-    display_subjects(args)
+    if args.live:
+        transmit_live(args)
+    else:
+        display_subjects(args)
