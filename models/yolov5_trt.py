@@ -201,13 +201,18 @@ class YoLov5TRT(object):
         return result_boxes, result_scores, end - start
 
     def infer_distances(self, depth, boxes):
+        # Check if the boxes array is empty
+        if len(boxes) == 0:
+            return np.array([], dtype=np.float64), np.array([], dtype=np.int64)
+
         # Add a second dimension, when it has only one dimension (only one box is found)
-        if len(boxes.shape) < 2:  
+        if len(boxes.shape) == 1:  
             boxes = boxes.reshape((-1, 4))
         boxes_num = boxes.shape[0]
 
-        distances = np.zeros((boxes_num, ), dtype=np.float32)
-        centers = np.zeros((boxes_num, 2), dtype=np.int32)
+        # Extract distances from the centers of the boxes
+        distances = np.zeros((boxes_num, ), dtype=np.float64)
+        centers = np.zeros((boxes_num, 2), dtype=np.int64)
         centers[:, 0] = (boxes[:, 0] + boxes[:, 2]) / 2
         centers[:, 1] = (boxes[:, 1] + boxes[:, 3]) / 2
         for idx, center in enumerate(centers):
