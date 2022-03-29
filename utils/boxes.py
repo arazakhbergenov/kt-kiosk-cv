@@ -51,3 +51,17 @@ def letterbox2(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scal
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img
+
+
+def get_area(box):
+    """
+    Возвращает площадь региона
+
+    Args:
+        box (np.array(4,)): координаты региона
+
+    Returns:
+        int: площадь региона
+    """
+    square = abs(box[2] - box[0]) * abs(box[3] - box[1])
+    return square
