@@ -6,6 +6,7 @@ import time
 import os
 import math
 import argparse
+from models.insightface_trt import InsightFace
 
 from models.yolov5_trt import YoLov5TRT
 import utils
@@ -86,6 +87,94 @@ def display_subjects(args):
         print('Person detection has finished!')
 
 
+def display_faces(args):
+    # choosing a video source
+    if args.video_path is not None:
+        video_file = 'VideoFile'
+        video_source = args.video_path
+    else:
+        video_file = 'camera'
+        # video_source = f'rtsp://{login}:{password}@{host}'
+        video_source = args.host
+    
+    global DISPLAY_SHAPE
+    if args.mini:
+        DISPLAY_SHAPE = (720, 405)
+    
+    try:
+        face_detector = InsightFace(args.face_detector, image_size=(320, 192))
+        age_gender = InsightFace(args.age_gender)
+    except AttributeError as e:
+        print(e)
+        print("Engine load has failed!")
+        return
+
+
+    # starting person detection
+    print('Connecting to the camera...')
+    video_reader = cv2.VideoCapture(video_source)
+    frame_counter = 0
+    MIN_FACE_SIZE = 5000
+    NUM_FACES = 2
+    try:
+        global FPS_THRESHOLD 
+        print('Face detection has started...')
+        while video_reader.isOpened():
+            status_rgb, frame = video_reader.read()
+            if not status_rgb:
+                print('Input from RGB Camera {} not available'.format(args.host))
+                break
+
+            frame_counter += 1
+
+            # frame = cv2.resize(frame, RAW_IMG_SHAPE)
+            boxes, landmarks = face_detector.infer_faces(frame, 0.3)
+
+            # Filter out by the size of bounding boxes
+            mask = [utils.boxes.get_area(box) > MIN_FACE_SIZE for box in boxes]
+            boxes = boxes[mask]
+            landmarks = landmarks[mask]
+
+            # Select the closest NUM_FACES faces
+            if boxes: 
+                boxes.sort(key=utils.boxes.get_area, reverse=True)
+                boxes = boxes[:NUM_FACES]
+            
+            # Check if the boxes list is empty
+            if not boxes:  
+                continue
+
+            ages, genders = [], []
+            for box, landmark in zip(boxes, landmarks):
+                face = utils.face_detection.crop_and_normalize(frame, box, landmark)
+                age, gender = age_gender.get_age_gender(face)
+                ages.append(ages)
+                genders.append(gender)
+
+            print('Input from {}, found faces = {}, ages = {}, genders = {}'.format(video_source, len(boxes), ages, genders))
+            
+            if args.visualize:
+                
+                for i in range(len(boxes)):
+                    utils.draw.plot_one_box(boxes[i], frame, color=(0, 255, 0), label="{} {}".format(int(ages[i]), int(round(genders[i]))))
+
+                frame = cv2.resize(frame, DISPLAY_SHAPE)
+                cv2.imshow(f'Video_{video_file}', frame)
+                ch = cv2.waitKey(FREEZE_TIME)
+                if ch == 27 or ch == ord('q'):
+                    break
+                elif ch == ord('s'):
+                    cv2.imwrite(f'/home/asylbek/Pictures/{frame_counter}.jpg', frame)
+
+    finally:
+        if args.visualize:
+            cv2.destroyAllWindows()
+
+        face_detector.destroy()
+        age_gender.destroy()
+        print('Person detection has finished!')
+
+
 def transmit_live(args):
     video_file = 'camera'
     if args.host is not None:
@@ -134,8 +223,11 @@ if __name__ == '__main__':
     parser.add_argument('--camera', default='intel', help="The type of the camera - 'intel' or 'hikvision'")
     parser.add_argument('--video-path', default=None, help='The path to a video file for testing')
 
-    parser.add_argument('--engine-path', default="weights/yolov5m.engine", help='The path to a engine file for testing')
-    parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for testing')    
+    parser.add_argument('--human-detector', default="weights/yolov5m.engine", help='The path to a human detection engine')
+    parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for a human detection')    
+
+    parser.add_argument('--face-detector', default="weights/scrfd_10g_bnkps_shape192x320.engine", help='The path to a face detection engine')
+    parser.add_argument('--age-gender', default="weights/ga_model.engine", help='The path to a age-gender engine')    
     
     parser.add_argument('--mini', default=False, help='The window size is reduced if it is true')
     parser.add_argument('--visualize', default=False, action='store_true', help='The window displays the videostream if it is true')
