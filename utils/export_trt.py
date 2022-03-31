@@ -23,9 +23,6 @@ def build_engine(model_path):
             parser.parse(model.read())
 
         last_layer = network.get_layer(network.num_layers - 1)
-        print(network)
-        network.mark_output(last_layer.get_output(0))
-        
         # Check if last layer recognizes it's output
         if not last_layer.get_output(0):
             # If not, then mark the output using TensorRT API
@@ -52,7 +49,7 @@ def save_engine(engine, file_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='../weights/ga_model.onnx', help='model.onnx path')
+    parser.add_argument('--model', type=str, default='../weights/age_gender_simplified.onnx', help='model.onnx path')
     opt = parser.parse_args()
     
     build_engine(opt.model)

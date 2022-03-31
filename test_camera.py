@@ -94,8 +94,12 @@ def display_faces(args):
         video_source = args.video_path
     else:
         video_file = 'camera'
-        # video_source = f'rtsp://{login}:{password}@{host}'
-        video_source = args.host
+        if args.camera == 'intel':
+            video_source = args.host
+        elif args.camera == 'hikvision':
+            video_source = f'rtsp://{args.login}:{args.password}@{args.host}'
+        else:
+            raise ValueError("The type of the camera must be 'intek' or 'hikvision'")
     
     global DISPLAY_SHAPE
     if args.mini:
@@ -103,7 +107,7 @@ def display_faces(args):
     
     try:
         face_detector = InsightFace(args.face_detector, image_size=(320, 192))
-        age_gender = InsightFace(args.age_gender)
+        age_gender = InsightFace(args.age_gender, image_size=(112, 112))
     except AttributeError as e:
         print(e)
         print("Engine load has failed!")
@@ -134,29 +138,31 @@ def display_faces(args):
             mask = [utils.boxes.get_area(box) > MIN_FACE_SIZE for box in boxes]
             boxes = boxes[mask]
             landmarks = landmarks[mask]
+            # Zipping boxes and landmarks together
+            regions = list(zip(boxes, landmarks))
 
             # Select the closest NUM_FACES faces
-            if boxes: 
-                boxes.sort(key=utils.boxes.get_area, reverse=True)
-                boxes = boxes[:NUM_FACES]
+            if len(regions) > 0: 
+                regions = sorted(regions, key=lambda pair: abs(pair[0][2] - pair[0][0]) * abs(pair[0][3] - pair[0][1]), reverse=True)
+                regions = regions[:NUM_FACES]
             
-            # Check if the boxes list is empty
-            if not boxes:  
+            # Check if the regions list is empty
+            if len(regions) == 0:  
                 continue
 
             ages, genders = [], []
-            for box, landmark in zip(boxes, landmarks):
-                face = utils.face_detection.crop_and_normalize(frame, box, landmark)
+            for box, landmark in regions:
+                face = face_detector.get_cropped_face(frame, box, landmark)
                 age, gender = age_gender.get_age_gender(face)
-                ages.append(ages)
+                ages.append(age)
                 genders.append(gender)
 
             print('Input from {}, found faces = {}, ages = {}, genders = {}'.format(video_source, len(boxes), ages, genders))
             
             if args.visualize:
                 
-                for i in range(len(boxes)):
-                    utils.draw.plot_one_box(boxes[i], frame, color=(0, 255, 0), label="{} {}".format(int(ages[i]), int(round(genders[i]))))
+                for i in range(len(regions)):
+                    utils.draw.plot_one_box(regions[i][0], frame, color=(0, 255, 0), label="{} {}".format(int(ages[i]), int(round(genders[i]))))
 
                 frame = cv2.resize(frame, DISPLAY_SHAPE)
                 cv2.imshow(f'Video_{video_file}', frame)
@@ -227,11 +233,13 @@ if __name__ == '__main__':
     parser.add_argument('--plugin-path', default="weights/libmyplugins.so", help='The path to a plugin file for a human detection')    
 
     parser.add_argument('--face-detector', default="weights/scrfd_10g_bnkps_shape192x320.engine", help='The path to a face detection engine')
-    parser.add_argument('--age-gender', default="weights/ga_model.engine", help='The path to a age-gender engine')    
+    parser.add_argument('--age-gender', default="weights/age_gender.engine", help='The path to a age-gender engine')    
     
     parser.add_argument('--mini', default=False, help='The window size is reduced if it is true')
     parser.add_argument('--visualize', default=False, action='store_true', help='The window displays the videostream if it is true')
     parser.add_argument('--live', default=False, action='store_true', help='Live-stream if it is true or run inference if it is false')
+
+    parser.add_argument('--verbose', default=False, help='The flag to print the results verbosely')
     args = parser.parse_args()
 
     # define_working_directory()
@@ -240,4 +248,4 @@ if __name__ == '__main__':
     if args.live:
         transmit_live(args)
     else:
-        display_subjects(args)
+        display_faces(args)

@@ -3,6 +3,7 @@
 """
 import cv2
 import numpy as np
+from skimage import transform as trans
 
 
 def preprocess_image(image_raw, input_size):
