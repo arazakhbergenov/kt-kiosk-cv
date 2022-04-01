@@ -257,10 +257,12 @@ def transmit_live(args):
     video_file, video_source = define_video_source(args)    
     define_display_shape(args)
 
+    print('Connecting to the camera...')
+    video_reader = cv2.VideoCapture(video_source)
     frame_counter = 0
     try:
-        while video_source.isOpened():
-            status, frame = video_source.read()
+        while video_reader.isOpened():
+            status, frame = video_reader.read()
             if not status:
                 break
 
